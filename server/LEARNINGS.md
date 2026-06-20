@@ -28,6 +28,8 @@ Non-obvious findings from working in the Fastify API and Drizzle/Postgres layer.
 
 ## Session Notes
 
+**2026-06-20** — Added `findings_by_severity` to `GET /repos/:id/pulls`. One grouped JOIN query (`findings INNER JOIN reviews WHERE pr_id IN (...)  GROUP BY pr_id, severity`) appended after the existing cost aggregation — same pattern, minimal impact. Added optional field to `PrMeta` Zod schema in both server and client vendor copies.
+
 **2026-06-19** — Implemented Run Cost Badge feature. Restored `cost_usd` to `agent_runs` (dropped in 0009), threaded `costUsd` through `run-executor` → `completeAgentRun` → `listRunsForPull`, added it to `RunStats`/`RunSummary`/`PrMeta` contracts, and added a cost aggregation query to the PR list route. Hit the silent-migration-skip gotcha (journal entry required); applied column via `docker exec psql` as workaround.
 
 ## Open Questions

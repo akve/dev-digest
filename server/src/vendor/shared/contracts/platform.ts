@@ -172,6 +172,12 @@ export const PrMeta = z.object({
   score: z.number().int().nullish(),
   // Total cost of all runs for this PR (sum of agent_runs.cost_usd); null until reviewed.
   cost_usd: z.number().nullish(),
+  // Per-severity finding counts (list endpoint only; absent until reviewed).
+  findings_by_severity: z.object({
+    CRITICAL: z.number().int(),
+    WARNING: z.number().int(),
+    SUGGESTION: z.number().int(),
+  }).nullish(),
 });
 export type PrMeta = z.infer<typeof PrMeta>;
 

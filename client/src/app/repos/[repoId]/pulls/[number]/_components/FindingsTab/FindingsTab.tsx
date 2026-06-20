@@ -2,9 +2,11 @@
 
 import React, { useCallback } from "react";
 import { Icon, Badge, Button, SectionLabel, EmptyState } from "@devdigest/ui";
+import type { Severity } from "@devdigest/ui";
 import { RunStatus } from "../RunStatus";
 import { RunHistory } from "../RunHistory/RunHistory";
 import { ReviewRunAccordion } from "../ReviewRunAccordion";
+import { SeverityFilterBar } from "./SeverityFilterBar";
 import { s } from "./styles";
 import type { FindingRecord, ReviewRecord, RunSummary, PrCommit } from "@devdigest/shared";
 import type { UseMutationResult } from "@tanstack/react-query";
@@ -66,6 +68,16 @@ export function FindingsTab({
   // Timeline → Review-runs navigation: clicking an agent name in the timeline
   // opens + scrolls to that run's accordion below. The nonce re-triggers the
   // scroll even when the same run is clicked twice.
+  const [activeSeverity, setActiveSeverity] = React.useState<Severity | null>(null);
+  const allFindings = React.useMemo(() => runs.flatMap((r) => r.findings), [runs]);
+  const findingsByRunId = React.useMemo(() => {
+    const map = new Map<string, typeof runs[0]["findings"]>();
+    for (const r of runs) {
+      if (r.run_id) map.set(r.run_id, r.findings);
+    }
+    return map;
+  }, [runs]);
+
   const [target, setTarget] = React.useState<{ runId: string; n: number } | null>(null);
   const handleGoToReview = useCallback((runId: string) => {
     setTarget((p) => ({ runId, n: (p?.n ?? 0) + 1 }));
@@ -131,10 +143,17 @@ export function FindingsTab({
           <RunHistory
             runs={prRuns ?? []}
             commits={prCommits}
+            findingsByRunId={findingsByRunId}
             onOpenTrace={handleOpenTrace}
             onGoToReview={handleGoToReview}
             onDelete={handleDelete}
           />
+        </div>
+      )}
+
+      {runs.length > 0 && (
+        <div style={s.severityFilterBar}>
+          <SeverityFilterBar findings={allFindings} active={activeSeverity} onChange={setActiveSeverity} />
         </div>
       )}
 
@@ -164,6 +183,7 @@ export function FindingsTab({
             headSha={headSha}
             targetRunId={target?.runId ?? null}
             targetNonce={target?.n ?? 0}
+            severityFilter={activeSeverity}
           />
         ))
       )}
