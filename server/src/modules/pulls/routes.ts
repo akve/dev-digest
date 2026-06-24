@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { and, desc, eq, inArray, sum } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, sum } from 'drizzle-orm';
 import type { PrMeta, PrDetail, GitHubClient, PrReviewComment } from '@devdigest/shared';
 import { PrCommentInput } from '@devdigest/shared';
 import * as t from '../../db/schema.js';
@@ -141,6 +141,24 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
       }
     }
 
+    // Per-severity finding counts for the FINDINGS column on the list.
+    type SevCounts = { CRITICAL: number; WARNING: number; SUGGESTION: number };
+    const findingsBySeverity = new Map<string, SevCounts>();
+    if (prIds.length > 0) {
+      const sevRows = await container.db
+        .select({ prId: t.reviews.prId, severity: t.findings.severity, cnt: count() })
+        .from(t.findings)
+        .innerJoin(t.reviews, eq(t.findings.reviewId, t.reviews.id))
+        .where(and(inArray(t.reviews.prId, prIds), eq(t.reviews.kind, 'review')))
+        .groupBy(t.reviews.prId, t.findings.severity);
+      for (const sr of sevRows) {
+        const cur = findingsBySeverity.get(sr.prId!) ?? { CRITICAL: 0, WARNING: 0, SUGGESTION: 0 };
+        const sev = sr.severity as keyof SevCounts;
+        if (sev in cur) cur[sev] = Number(sr.cnt);
+        findingsBySeverity.set(sr.prId!, cur);
+      }
+    }
+
     const now = Date.now();
     return rows.map((r) => {
       const review = latestReviewByPr.get(r.id);
@@ -166,6 +184,7 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
         updated_at: r.updatedAt?.toISOString() ?? null,
         score: review ? review.score : null,
         cost_usd: costByPr.get(r.id) ?? null,
+        findings_by_severity: findingsBySeverity.get(r.id) ?? null,
       };
     });
   });

@@ -45,4 +45,7 @@ export const s = {
     display: "flex",
     gap: 8,
   } satisfies CSSProperties,
+  severityFilterBar: {
+    marginBottom: 4,
+  } satisfies CSSProperties,
 } as const;

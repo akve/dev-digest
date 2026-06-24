@@ -10,6 +10,7 @@ import { SIZE_COLOR, STATUS_META } from "../../constants";
 import { relativeTime, sizeOf } from "../../helpers";
 import { formatCost } from "@/lib/format";
 import { s } from "../../styles";
+import { FindingsCell } from "../FindingsCell/FindingsCell";
 
 export function PRRow({ pr, repoId }: { pr: PrMeta; repoId: string }) {
   const t = useTranslations("prReview");
@@ -54,13 +55,16 @@ export function PRRow({ pr, repoId }: { pr: PrMeta; repoId: string }) {
           <span style={s.muted}>—</span>
         )}
       </div>
-      <div style={s.muted} className="mono">
-        {formatCost(pr.cost_usd)}
+      <div>
+        <FindingsCell prId={pr.id ?? null} findingsBySeverity={pr.findings_by_severity} />
       </div>
       <div>
         <Badge dot color={st.c} bg="transparent">
           {t(`list.status.${st.labelKey}`)}
         </Badge>
+      </div>
+      <div style={s.muted} className="mono">
+        {formatCost(pr.cost_usd)}
       </div>
       <div style={s.updatedCell}>{relativeTime(pr.updated_at)}</div>
     </div>

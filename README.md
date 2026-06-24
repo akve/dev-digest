@@ -88,11 +88,13 @@ These are intentionally **not** in the starter — each lesson adds one back:
 | L07 | Multi-agent review · Run Trace / Live Log · Persistent memory · per-agent stats |
 | L08 | Plugin export/import · Agent performance dashboard · weekly digest |
 
-## Prerequisites
+## How to Run
+
+### Prerequisites
 
 - **Node** ≥ 22 · **pnpm** ≥ 10 (`npm i -g pnpm`) · **Docker** (for Postgres)
 
-## Quick start (from zero)
+### Fastest start
 
 ```sh
 ./scripts/dev.sh
@@ -110,27 +112,63 @@ Postgres keeps running (`docker compose down` to stop it).
 
 Flags: `--no-seed` · `--no-client` · `--db-only` · `--help`.
 
-> Add your keys in `server/.env` (`OPENAI_API_KEY` / `ANTHROPIC_API_KEY`,
-> `GITHUB_TOKEN`) or via the Settings UI at runtime.
+### Environment variables
 
-## Manual steps (what the script does)
+Add to `server/.env` (copied from `.env.example` by `dev.sh`, or create manually):
+
+| Variable | Required | Description |
+|---|---|---|
+| `OPENAI_API_KEY` | for OpenAI reviews | LLM key |
+| `ANTHROPIC_API_KEY` | for Anthropic reviews | LLM key |
+| `GITHUB_TOKEN` | yes | PR import + post review comments |
+| `REPO_INTEL_ENABLED` | optional | Enable repo indexing (default off) |
+
+Keys can also be set at runtime via the Settings UI (stored in `~/.devdigest/secrets.json`).
+
+### Manual steps
 
 ```sh
 docker compose up -d                                   # Postgres + pgvector
 
 cd server && pnpm install
-pnpm db:migrate          # apply migrations (NOT run automatically on boot)
+pnpm db:migrate          # REQUIRED — server does NOT migrate on boot
 pnpm db:seed             # idempotent demo data (optional)
 pnpm dev                 # API on :3001
 
 cd ../client && pnpm install && pnpm dev               # web on :3000
 ```
 
-## Useful scripts
+### Scripts reference
 
-`server/`: `dev` · `build` · `db:migrate` · `db:seed` · `db:generate` · `test` · `typecheck`
-(unit/integration split: `pnpm exec vitest run --exclude '**/*.it.test.ts'` / `pnpm exec vitest run .it.test`)
-`client/`: `dev` · `build` · `start` · `test` · `typecheck`
+**`server/`**
+
+| Script | What it does |
+|---|---|
+| `pnpm dev` | Hot-reload API server |
+| `pnpm db:migrate` | Apply pending Drizzle migrations |
+| `pnpm db:seed` | Idempotent demo data |
+| `pnpm db:generate` | Generate migration from schema change |
+| `pnpm test` | All server tests |
+| `pnpm exec vitest run --exclude '**/*.it.test.ts'` | Unit tests only (no Docker needed) |
+| `pnpm exec vitest run .it.test` | Integration tests (needs Postgres) |
+| `pnpm typecheck` | TypeScript check |
+
+**`client/`**
+
+| Script | What it does |
+|---|---|
+| `pnpm dev` | Next.js dev server on :3000 |
+| `pnpm build` | Production build |
+| `pnpm test` | Vitest + jsdom (no API needed) |
+| `pnpm typecheck` | TypeScript check |
+
+### Ports
+
+| Service | Port |
+|---|---|
+| Next.js UI | 3000 |
+| Fastify API | 3001 |
+| Postgres | 5432 |
 
 ## Testing & CI
 
