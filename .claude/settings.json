@@ -1,0 +1,28 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/inject-learnings.sh\"",
+            "timeout": 15,
+            "statusMessage": "Loading engineering learnings..."
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/write-insights.sh\"",
+            "asyncRewake": true,
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,4 +1,4 @@
-# LEARNINGS — server (@devdigest/api)
+# INSIGHTS — server (@devdigest/api)
 
 Non-obvious findings from working in the Fastify API and Drizzle/Postgres layer. Append-only — never overwrite, only add. Each entry: date + what + why non-obvious + `file:line` evidence.
 

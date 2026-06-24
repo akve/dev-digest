@@ -1,4 +1,4 @@
-# LEARNINGS — client (@devdigest/web)
+# INSIGHTS — client (@devdigest/web)
 
 Non-obvious findings from working in the Next.js frontend. Append-only — never overwrite, only add. Each entry: date + what + why non-obvious + `file:line` evidence.
 
