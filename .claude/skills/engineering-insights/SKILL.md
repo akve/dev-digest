@@ -1,81 +1,98 @@
 ---
 name: engineering-insights
-description: "Captures non-obvious findings from the current session and appends them to the correct module's INSIGHTS.md. Use at the end of any session that involved a problem, fix, or discovery. Also use proactively mid-session when something non-obvious is confirmed — dead ends, silent failures, surprising defaults, deliberate tradeoffs. Third person: 'Invoke when the agent discovers something that would surprise a cold reader of the code.'"
-metadata:
-  tags: learnings, knowledge-capture, session-wrap-up, documentation
+description: Captures non-obvious engineering insights into the touched module's INSIGHTS.md (client, server, reviewer-core, e2e). Use during a session the moment you hit something a future agent would otherwise relearn — a gotcha, a working approach, a dead-end antipattern, a codebase convention, a tool/library quirk, a recurring error+fix, or an open question — and again at session end, on "wrap up" / "retro", or when /engineering-insights is invoked. Reads the existing file first, never duplicates, writes only substantial file-grounded entries, and is strictly append-only (never overwrites).
 ---
 
-## When to use
+# Engineering Insights
 
-- At the end of any session longer than ~30 min that involved a problem, fix, or discovery
-- Proactively mid-session when you confirm something non-obvious (don't wait until the end)
-- When an approach was tried and failed — dead ends are the most valuable entries
-- Skip for trivial sessions: typo fixes, renaming, reading-only sessions with no surprises
+Capture one durable engineering insight into the **INSIGHTS.md of the module the work
+touched**, so the next session doesn't relearn it. Read what's already there, add only
+what's new and substantial, never overwrite.
 
-## Module map
+## Where to write (module routing)
 
-| Module | INSIGHTS.md |
-|--------|-------------|
-| client | `client/INSIGHTS.md` |
-| server | `server/INSIGHTS.md` |
-| reviewer-core | `reviewer-core/INSIGHTS.md` |
-| repo-intel | `server/src/modules/repo-intel/INSIGHTS.md` |
-| e2e | `e2e/INSIGHTS.md` |
+Write to the file of the package the work actually touched:
+
+| Work touched | File |
+|---|---|
+| client (`@devdigest/web`) | `client/INSIGHTS.md` |
+| server (`@devdigest/api`, incl. repo-intel) | `server/INSIGHTS.md` |
+| reviewer-core (`@devdigest/reviewer-core`) | `reviewer-core/INSIGHTS.md` |
+| e2e (`@devdigest/e2e`) | `e2e/INSIGHTS.md` |
+| spans several packages | write the part relevant to each, to each file |
+| pure root config / CI only | usually not a module insight — skip it |
+
+Never write insights into this SKILL.md itself.
+
+## What counts (the 7 sections)
+
+Each `INSIGHTS.md` has fixed sections — append each entry under the right one:
+
+- **What Works** — an approach/solution that worked here.
+- **What Doesn't Work** — dead ends and antipatterns. **Highest-value section, most often skipped — prioritize it.**
+- **Codebase Patterns** — conventions and architectural decisions.
+- **Tool & Library Notes** — dependency quirks and gotchas.
+- **Recurring Errors & Fixes** — an error you'd hit again + the fix.
+- **Session Notes** — dated session summaries (use a `### YYYY-MM-DD` subheading).
+- **Open Questions** — what's still unresolved.
+
+## Concrete, not banal
+
+Test before writing: **"If this were obvious to anyone reading the code, don't write it."**
+
+| ❌ Noise | ✅ Useful (actionable cold) |
+|---|---|
+| "Promises can be tricky" | "`Promise.all()` on the ingest pipeline times out after 30 items — use `Promise.allSettled()` in batches of 10" |
+| "be careful with context enrichment" | "context enrichment is best-effort: on unindexed/error, omit the section, never throw — `server/...:NN`" |
+
+## Entry format
+
+Append a bullet under the matching `##` section:
+
+```
+- **YYYY-MM-DD** — <concrete, actionable insight>. Evidence: `path/file.ts:NN`.
+```
+
+Session Notes instead group under a dated subheading:
+
+```
+### YYYY-MM-DD
+- <what the session accomplished / decided, one line per point>
+```
 
 ## Workflow
 
-### 1. Identify touched modules
+Copy this checklist and work through it:
 
-Determine which modules had files read, edited, or discussed this session.
-
-### 2. Extract findings — quality gate
-
-For each touched module, scan the session for findings that pass:
-
-**Capture it if:**
-- Behavior contradicts what the code appears to do at first glance
-- A constraint or invariant not documented in comments or READMEs
-- A gotcha that caused or could cause a bug (silent failure, order dependency, surprising default)
-- A deliberate performance or correctness tradeoff was confirmed
-- You changed your initial reading of the code based on evidence
-- An approach failed — dead ends are the most valuable entries
-
-**Skip it if:**
-- Already in a README, CLAUDE.md, or this INSIGHTS.md
-- Obvious to anyone reading the relevant code
-- Generic ("async can be tricky", "type errors happen")
-- Restates what identifiers already say
-
-Tiebreaker: *Would this surprise a contributor reading the code cold?* If no — skip.
-
-### 3. Classify each finding
-
-| Section | What goes here |
-|---------|---------------|
-| What Works | Pattern or approach confirmed effective |
-| What Doesn't Work | Dead end, antipattern, silent failure — never skip this section |
-| Codebase Patterns | Project convention or architectural decision |
-| Tool & Library Notes | Dependency quirk, version-specific behavior, config surprise |
-| Recurring Errors & Fixes | Error seen more than once + confirmed fix |
-| Session Notes | One dated summary per session |
-| Open Questions | Suspected but not yet confirmed |
-
-### 4. Append entries
-
-Append to the correct section in the correct module's INSIGHTS.md.
-
-**Format:**
 ```
-**YYYY-MM-DD** — <one sentence: what is non-obvious and why it matters> (`path/to/file.ts:line`)
+- [ ] 1. Gate check — was this session substantial?
+- [ ] 2. Read the touched module's INSIGHTS.md
+- [ ] 3. Draft ≤5 candidates, ranked by signal
+- [ ] 4. Dedup against what's already there
+- [ ] 5. Append automatically (append-only)
+- [ ] 6. One-line summary
 ```
 
-**Rules:**
-- Append only — never overwrite or delete existing entries
-- Always use today's date
-- Always include `file:line` when possible
-- One entry per distinct finding
-- Session Notes: one entry per session summarising what was done and found
+1. **Gate check.** Did the session produce something substantial — a problem solved, a decision made, a non-obvious discovery? If not → **write nothing** and stop.
+2. **Read first.** Open the touched module's `INSIGHTS.md` before drafting anything.
+3. **Draft ≤5 candidates**, ranked by signal (user corrections and gotchas highest; nice-to-know patterns lowest). Each candidate = the exact proposed line + its target section + `file:line` evidence.
+4. **Dedup.** Drop any candidate already covered by an existing entry. If reality contradicts an old entry, add a new dated note that supersedes it — never edit the old one.
+5. **Append** the survivors (automatic mode — no approval prompt). If nothing substantial survives gate + dedup, write nothing.
+6. **Summary.** One line: what was written, to which file, what was skipped.
 
-### 5. Report
+## Non-destructive write contract (hard rule)
 
-Print a short summary: which files were updated, how many entries per file, which sections. If nothing passed the quality gate, say so explicitly — an empty session is valid.
+This skill is **append-only** and must never clobber existing content:
+
+- **Re-read the target `INSIGHTS.md` immediately before writing** — its state may have changed since the session started.
+- **Insert with an anchored `Edit`** that adds the new bullet under the correct `##` heading. **Never use the `Write` tool on an existing `INSIGHTS.md`** — `Write` replaces the whole file and would destroy prior content.
+- **Preserve verbatim** the `# Insights — …` header, the preamble, every section heading, and every entry already in the file. New content is only ever *added*.
+- **Corrections are additive** — supersede a wrong entry with a new dated note; do not rewrite or delete the old one.
+- **Idempotent** — if an equivalent entry already exists, skip it (no duplicate, no rewrite).
+
+## Maintenance (not per-session)
+
+Append-only keeps the file growing, so keep it lean out of band: prune monthly (drop
+fixed-bug, duplicate, and never-needed entries), aim for ~30 high-value entries per file
+before splitting into domain files, and treat the file as a reviewed draft — spot-check it,
+since an incorrect entry propagates to every future session until corrected.
