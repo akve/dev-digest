@@ -1,79 +1,50 @@
-/* SkillCard — single row in the skills list. Shows name, type badge,
-   description, enabled toggle, and stats line. */
+/* SkillCard — type badge, source label, enabled toggle, delete. */
 "use client";
 
 import React from "react";
-import { useTranslations } from "next-intl";
-import { Icon, Badge, Toggle, Button, Modal } from "@devdigest/ui";
+import { Icon, Badge, Toggle } from "@devdigest/ui";
 import type { Skill } from "@devdigest/shared";
-import { useUpdateSkill, useDeleteSkill } from "@/lib/hooks/skills";
-import { resolveSkillThreat } from "@/lib/skill-threat";
+import { useDeleteSkill } from "../../../../lib/hooks/skills";
 
-const TYPE_COLOR: Record<string, string> = {
-  rubric: "var(--accent)",
-  convention: "var(--ok)",
-  security: "var(--crit)",
-  custom: "var(--warn)",
+const SOURCE_LABEL: Record<string, string> = {
+  manual: "Manual",
+  imported_url: "Imported",
+  extracted: "Extracted",
+  community: "Community",
 };
 
 export function SkillCard({
   skill,
   active,
   onClick,
-  onDeleted,
+  onToggle,
 }: {
   skill: Skill;
   active?: boolean;
   onClick?: () => void;
-  onDeleted?: () => void;
+  onToggle?: (enabled: boolean) => void;
 }) {
-  const t = useTranslations("skills");
-  const update = useUpdateSkill();
   const del = useDeleteSkill();
-  const [confirming, setConfirming] = React.useState(false);
-
-  const color = TYPE_COLOR[skill.type] ?? "var(--text-muted)";
-  const { isDangerous, isSuspicious, isScanning, isBlocked, badge } =
-    resolveSkillThreat(skill);
-
-  const borderColor = isDangerous
-    ? "var(--crit)"
-    : isSuspicious
-      ? "var(--warn)"
-      : active
-        ? "var(--accent)"
-        : "var(--border)";
-
-  const bgColor = isDangerous
-    ? "color-mix(in srgb, var(--crit) 6%, var(--bg-surface))"
-    : isSuspicious
-      ? "color-mix(in srgb, var(--warn) 6%, var(--bg-surface))"
-      : active
-        ? "var(--accent-bg)"
-        : "var(--bg-surface)";
-
   return (
     <div
       onClick={onClick}
       style={{
-        padding: "12px 14px",
+        padding: "10px 12px",
         borderRadius: 8,
-        border: `1px solid ${borderColor}`,
-        background: bgColor,
         cursor: "pointer",
-        display: "flex",
-        flexDirection: "column",
-        gap: 6,
-        opacity: skill.enabled ? 1 : 0.65,
+        marginBottom: 4,
+        background: active ? "var(--bg-active)" : "transparent",
+        border: active ? "1px solid var(--border-active)" : "1px solid transparent",
+        opacity: skill.enabled ? 1 : 0.6,
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+        <Icon.Sparkles size={13} style={{ color: "var(--accent)", flexShrink: 0 }} />
         <span
           style={{
             fontWeight: 600,
             fontSize: 13,
             flex: 1,
-            minWidth: 0,
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
@@ -81,50 +52,17 @@ export function SkillCard({
         >
           {skill.name}
         </span>
-        {badge ? (
-          <span
-            title={badge.title}
-            style={{
-              fontSize: 10,
-              fontWeight: 700,
-              color: badge.color,
-              background: badge.bg,
-              border: `1px solid ${badge.border}`,
-              padding: "2px 6px",
-              borderRadius: 4,
-              flexShrink: 0,
-              whiteSpace: "nowrap",
-              maxWidth: 120,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-            }}
-          >
-            {badge.text}
-          </span>
-        ) : (
-          <Badge color={color}>{t(`listItem.type.${skill.type}`)}</Badge>
+        {onToggle && (
+          <div onClick={(e) => e.stopPropagation()}>
+            <Toggle on={skill.enabled} onChange={onToggle} size={14} />
+          </div>
         )}
-        <div
-          onClick={(e) => e.stopPropagation()}
-          title={
-            isBlocked ? "Blocked: vet this skill before enabling" : undefined
-          }
-          style={{
-            cursor: isBlocked ? "not-allowed" : undefined,
-            flexShrink: 0,
-          }}
-        >
-          <Toggle
-            on={skill.enabled}
-            size={13}
-            onChange={(enabled) => {
-              if (!isBlocked)
-                update.mutate({ id: skill.id, patch: { enabled } });
-            }}
-          />
-        </div>
         <button
-          onClick={(e) => { e.stopPropagation(); setConfirming(true); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (window.confirm(`Delete skill "${skill.name}"? This cannot be undone.`))
+              del.mutate(skill.id);
+          }}
           disabled={del.isPending}
           title="Delete skill"
           aria-label="Delete skill"
@@ -133,8 +71,8 @@ export function SkillCard({
             border: "none",
             cursor: del.isPending ? "not-allowed" : "pointer",
             color: "var(--text-muted)",
-            padding: 4,
             display: "inline-flex",
+            padding: 4,
           }}
         >
           <Icon.Trash
@@ -143,38 +81,12 @@ export function SkillCard({
           />
         </button>
       </div>
-
-      {confirming && (
-        // Stop click from bubbling to SkillCard's onClick (which would navigate to the skill)
-        <div onClick={(e) => e.stopPropagation()}>
-        <Modal
-          width={380}
-          title="Delete skill"
-          subtitle={`"${skill.name}" will be permanently removed. This cannot be undone.`}
-          onClose={() => setConfirming(false)}
-          footer={
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              <Button kind="ghost" size="sm" onClick={() => setConfirming(false)}>Cancel</Button>
-              <Button
-                kind="danger"
-                size="sm"
-                onClick={() => {
-                  setConfirming(false);
-                  del.mutate(skill.id, { onSuccess: () => onDeleted?.() });
-                }}
-              >
-                Delete
-              </Button>
-            </div>
-          }
-        />
-        </div>
-      )}
       {skill.description && (
         <div
           style={{
             fontSize: 12,
             color: "var(--text-secondary)",
+            marginBottom: 6,
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
@@ -183,41 +95,17 @@ export function SkillCard({
           {skill.description}
         </div>
       )}
-      <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
-        {t(`listItem.source.${skill.source}`)} · v{skill.version}
-        {!skill.enabled && !isBlocked && (
-          <>
-            {" "}
-            ·{" "}
-            <span style={{ color: "var(--warn)" }}>
-              {t("preview.disabled")}
-            </span>
-          </>
-        )}
-        {isBlocked && (
-          <>
-            {" "}
-            ·{" "}
-            <span
-              style={{
-                color: isDangerous ? "var(--crit)" : "var(--warn)",
-                fontWeight: 600,
-              }}
-            >
-              {isDangerous
-                ? "blocked — injection detected"
-                : "disabled — suspicious content"}
-            </span>
-          </>
-        )}
-        {isScanning && (
-          <>
-            {" "}
-            ·{" "}
-            <span style={{ color: "var(--text-muted)" }}>
-              pending security scan
-            </span>
-          </>
+      <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+        <Badge color="var(--text-secondary)" mono>
+          {skill.type}
+        </Badge>
+        <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+          ✎ {SOURCE_LABEL[skill.source] ?? skill.source}
+        </span>
+        {skill.source !== "manual" && (
+          <Badge color="var(--warning-text)" icon="AlertTriangle" style={{ fontSize: 10 }}>
+            needs vetting
+          </Badge>
         )}
       </div>
     </div>

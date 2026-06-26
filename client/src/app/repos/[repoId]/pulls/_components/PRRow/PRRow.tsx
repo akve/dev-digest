@@ -6,30 +6,33 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Icon, Avatar, Badge, CircularScore } from "@devdigest/ui";
 import type { PrMeta } from "@/lib/types";
-import { RunCostBadge } from "@/components/RunCostBadge/RunCostBadge";
-import { SeverityChip } from "@/components/SeverityChip/SeverityChip";
-import { usePrReviews } from "@/lib/hooks/reviews";
-import { FINDINGS_FIELDS, SIZE_COLOR, STATUS_META } from "../../constants";
+import { RunCostBadge } from "@/components/RunCostBadge";
+import { FindingsCountChips, countBySeverity, totalCount } from "@/components/FindingsCountChips";
+import { FindingsHoverCard } from "@/components/FindingsHoverCard";
+import { FindingPreview } from "@/components/FindingPreview";
+import { SIZE_COLOR, STATUS_META } from "../../constants";
 import { relativeTime, sizeOf } from "../../helpers";
 import { s } from "../../styles";
-import { FindingsPopover } from "../FindingsPopover/FindingsPopover";
 
-export function PRRow({ pr, repoId }: { pr: PrMeta; repoId: string }) {
+export function PRRow({
+  pr,
+  repoId,
+  repoFullName,
+}: {
+  pr: PrMeta;
+  repoId: string;
+  /** owner/repo — lets the findings popover deep-link file:line to GitHub. */
+  repoFullName?: string | null;
+}) {
   const t = useTranslations("prReview");
   const router = useRouter();
   const [h, setH] = React.useState(false);
-  const [anchorRect, setAnchorRect] = React.useState<DOMRect | null>(null);
   const st = STATUS_META[pr.status] ?? STATUS_META.needs_review!;
   const { size, lines } = sizeOf(pr);
   const reviewed = pr.score != null; // null score ⇒ PR has never been reviewed
-  const totalFindings =
-    (pr.findings_critical ?? 0) + (pr.findings_warning ?? 0) + (pr.findings_suggestion ?? 0);
-
-  const { data: reviewsData, isLoading: reviewsLoading } = usePrReviews(
-    anchorRect && totalFindings > 0 ? pr.id : undefined,
-  );
-  const latestReview = reviewsData?.find((r) => r.kind === "review");
-
+  const findings = pr.findings ?? [];
+  const findingCounts = countBySeverity(findings);
+  const findingTotal = totalCount(findingCounts);
   return (
     <div
       onMouseEnter={() => setH(true)}
@@ -66,32 +69,28 @@ export function PRRow({ pr, repoId }: { pr: PrMeta; repoId: string }) {
           <span style={s.muted}>—</span>
         )}
       </div>
-      <div
-        style={s.findingsCell}
-        onMouseEnter={(e) => {
-          e.stopPropagation();
-          setAnchorRect(e.currentTarget.getBoundingClientRect());
-        }}
-        onMouseLeave={(e) => {
-          e.stopPropagation();
-          setAnchorRect(null);
-        }}
-      >
-        {!reviewed || totalFindings === 0 ? (
+      <div style={s.findingsCell}>
+        {findingTotal === 0 ? (
           <span style={s.muted}>—</span>
         ) : (
-          FINDINGS_FIELDS.map(({ sev, field }) => {
-            const n = pr[field] ?? 0;
-            if (!n) return null;
-            return <SeverityChip key={sev} sev={sev} count={n} />;
-          })
-        )}
-        {anchorRect && totalFindings > 0 && (
-          <FindingsPopover
-            review={latestReview}
-            isLoading={reviewsLoading}
-            anchorRect={anchorRect}
-          />
+          <FindingsHoverCard
+            align="left"
+            anchor={<FindingsCountChips counts={findingCounts} size={14} />}
+            header={t("findingsPopover.header", { count: findingTotal })}
+          >
+            {findings.map((f) => (
+              <FindingPreview
+                key={f.id}
+                f={f}
+                repoFullName={repoFullName}
+                headSha={pr.head_sha}
+                prNumber={pr.number}
+                onSelect={(id) =>
+                  router.push(`/repos/${repoId}/pulls/${pr.number}?tab=findings&finding=${id}`)
+                }
+              />
+            ))}
+          </FindingsHoverCard>
         )}
       </div>
       <div>
@@ -100,7 +99,7 @@ export function PRRow({ pr, repoId }: { pr: PrMeta; repoId: string }) {
         </Badge>
       </div>
       <div style={s.costCell}>
-        <RunCostBadge cost={pr.last_run_cost_usd} />
+        <RunCostBadge variant="compact" cost={pr.cost_usd} />
       </div>
       <div style={s.updatedCell}>{relativeTime(pr.updated_at)}</div>
     </div>

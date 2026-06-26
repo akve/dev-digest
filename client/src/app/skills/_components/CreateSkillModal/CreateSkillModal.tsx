@@ -4,6 +4,7 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 import { Button, FormField, TextInput, SelectInput } from "@devdigest/ui";
+import type { SkillType } from "@devdigest/shared";
 import { useCreateSkill, useImportSkill } from "@/lib/hooks/skills";
 import { useImportSkillFromUrl } from "@/lib/hooks/conventions";
 
@@ -115,14 +116,14 @@ export function CreateSkillModal({
   // Create form
   const [name, setName] = React.useState("");
   const [description, setDescription] = React.useState("");
-  const [type, setType] = React.useState("rubric");
+  const [type, setType] = React.useState<SkillType>("rubric");
   const [body, setBody] = React.useState("");
   const create = useCreateSkill();
 
   // Import form
   const [importName, setImportName] = React.useState("");
   const [importBody, setImportBody] = React.useState("");
-  const [importType, setImportType] = React.useState("rubric");
+  const [importType, setImportType] = React.useState<SkillType>("rubric");
   const [zipEntries, setZipEntries] = React.useState<
     { name: string; body: string }[]
   >([]);
@@ -182,9 +183,9 @@ export function CreateSkillModal({
 
   const handleImport = () => {
     importSkill.mutate(
-      { name: importName, body: importBody },
+      { name: importName, body: importBody, type: importType },
       {
-        onSuccess: (s) => {
+        onSuccess: (s: { id: string }) => {
           onCreated?.(s.id);
           onClose();
         },
@@ -279,7 +280,7 @@ export function CreateSkillModal({
             <FormField label="Type">
               <SelectInput
                 value={type}
-                onChange={setType}
+                onChange={(v) => setType(v as SkillType)}
                 options={TYPE_OPTIONS}
               />
             </FormField>
@@ -325,7 +326,7 @@ export function CreateSkillModal({
             <FormField label="Type">
               <SelectInput
                 value={importType}
-                onChange={setImportType}
+                onChange={(v) => setImportType(v as SkillType)}
                 options={TYPE_OPTIONS}
               />
             </FormField>

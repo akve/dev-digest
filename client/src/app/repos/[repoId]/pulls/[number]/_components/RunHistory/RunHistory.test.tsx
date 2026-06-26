@@ -75,6 +75,18 @@ describe("RunHistory — outcome badge", () => {
     renderRuns([run({ status: "running", score: null, blockers: null })]);
     expect(screen.getByText("running")).toBeInTheDocument();
   });
+
+  it("a settled run shows total tokens · cost; a missing cost shows '—' not '$0.00'", () => {
+    renderRuns([
+      run({ status: "done", tokens_in: 9000, tokens_out: 119, cost_usd: 0.0013, score: 80 }),
+    ]);
+    expect(screen.getByText(/9,119 tok · \$0\.0013/)).toBeInTheDocument();
+
+    cleanup();
+    renderRuns([run({ status: "done", tokens_in: 0, tokens_out: 0, cost_usd: null, score: 80 })]);
+    expect(screen.getByText("—")).toBeInTheDocument();
+    expect(screen.queryByText(/\$0\.00/)).not.toBeInTheDocument();
+  });
 });
 
 describe("RunHistory — per-severity chips", () => {
