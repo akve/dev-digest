@@ -81,7 +81,7 @@ flowchart TB
     settings["settings<br/>/settings · /providers"]
     workspace["workspace<br/>/workspace"]
   end
-  HEALTH["/health (liveness) · /health/ready (DB ping → 200/503)"]
+  HEALTH["/health · /healthcheck (liveness) · /health/ready (DB ping → 200/503)"]
 ```
 
 ## Environment
