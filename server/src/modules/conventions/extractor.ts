@@ -27,6 +27,10 @@ async function resolveSafeRepoPath(
   const trimmed = candidatePath.trim();
   if (!trimmed) return null;
   if (trimmed.includes("\0")) return null;
+  const segments = trimmed.split(/[\\/]+/).filter(Boolean);
+  if (segments.includes(".")) {
+    throw new Error("Unsafe path: dot segment is not allowed");
+  }
   if (trimmed.startsWith("\\\\")) return null;
   if (isAbsolute(trimmed)) return null;
   if (/^[A-Za-z]:[\\/]/.test(trimmed)) return null;

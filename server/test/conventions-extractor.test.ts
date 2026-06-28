@@ -93,6 +93,36 @@ describe("extractConventions path safety", () => {
     expect(result[0]!.evidencePath).toBe("src/safe.ts");
   });
 
+  it("rejects evidence with standalone dot path segments", async () => {
+    const clonePath = await mkdtemp(join(tmpdir(), "dd-conv-"));
+    await mkdir(join(clonePath, "src"), { recursive: true });
+    await writeFile(join(clonePath, "src", "safe.ts"), "const safe = true;\n", "utf-8");
+
+    const llm = mockLlm([
+      {
+        category: "security",
+        rule: "No dot segments",
+        evidence: {
+          file: "./src/safe.ts",
+          line_start: 1,
+          line_end: 1,
+          snippet: "const safe = true;",
+        },
+        confidence: 0.9,
+      },
+    ]);
+
+    const result = await extractConventions({
+      clonePath,
+      samplePaths: ["src/safe.ts"],
+      repoName: "repo",
+      llm,
+      model: "mock",
+    });
+
+    expect(result).toEqual([]);
+  });
+
   it("rejects symlink-based escape paths", async () => {
     const clonePath = await mkdtemp(join(tmpdir(), "dd-conv-"));
     const outsideDir = await mkdtemp(join(tmpdir(), "dd-outside-"));
