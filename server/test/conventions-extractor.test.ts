@@ -157,4 +157,35 @@ describe("extractConventions path safety", () => {
 
     expect(result).toEqual([]);
   });
+
+  it("skips in-repo symlinked files from extraction", async () => {
+    const clonePath = await mkdtemp(join(tmpdir(), "dd-conv-"));
+    await mkdir(join(clonePath, "src"), { recursive: true });
+    await writeFile(join(clonePath, "src", "safe.ts"), "const safe = true;\n", "utf-8");
+    await symlink(join(clonePath, "src", "safe.ts"), join(clonePath, "src", "safe-link.ts"));
+
+    const llm = mockLlm([
+      {
+        category: "style",
+        rule: "No symlink evidence",
+        evidence: {
+          file: "src/safe-link.ts",
+          line_start: 1,
+          line_end: 1,
+          snippet: "const safe = true;",
+        },
+        confidence: 0.95,
+      },
+    ]);
+
+    const result = await extractConventions({
+      clonePath,
+      samplePaths: ["src/safe.ts"],
+      repoName: "repo",
+      llm,
+      model: "mock",
+    });
+
+    expect(result).toEqual([]);
+  });
 });

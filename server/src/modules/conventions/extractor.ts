@@ -1,4 +1,4 @@
-import { readFile, realpath } from "fs/promises";
+import { lstat, readFile, realpath } from "fs/promises";
 import { isAbsolute, relative, resolve, sep } from "path";
 import { z } from "zod";
 import type { LLMProvider } from "@devdigest/shared";
@@ -40,6 +40,14 @@ async function resolveSafeRepoPath(
   const lexicalRel = relative(baseDir, fullPath);
   if (!lexicalRel || lexicalRel === ".." || lexicalRel.startsWith(`..${sep}`)) {
     return null;
+  }
+  // Skip any file path that traverses through symlinks (or is itself a symlink).
+  const pathSegments = lexicalRel.split(/[\\/]+/).filter(Boolean);
+  let cursor = baseDir;
+  for (const segment of pathSegments) {
+    cursor = resolve(cursor, segment);
+    const stat = await lstat(cursor).catch(() => null);
+    if (stat?.isSymbolicLink()) return null;
   }
 
   // Resolve symlinks and enforce containment again on canonical paths.
