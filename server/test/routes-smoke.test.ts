@@ -19,6 +19,14 @@ describe('routes (no DB)', () => {
     await app.close();
   });
 
+  it('GET /healthcheck → ok', async () => {
+    const app = await buildApp({ config });
+    const res = await app.inject({ method: 'GET', url: '/healthcheck' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ status: 'ok' });
+    await app.close();
+  });
+
   it('POST /settings/test-connection (github) returns structured ConnTestResult', async () => {
     const app = await buildApp({
       config,
