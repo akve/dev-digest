@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useTranslations } from "next-intl";
 import type { ConventionCandidate } from "@devdigest/shared";
 import {
   useAcceptConvention,
@@ -21,6 +22,7 @@ function confidenceColor(v: number): string {
 }
 
 export function ConventionCard({ convention: c, repoId, repoUrl }: Props) {
+  const t = useTranslations("conventions");
   const accept = useAcceptConvention();
   const reject = useRejectConvention();
   const updateRule = useUpdateConventionRule();
@@ -40,9 +42,16 @@ export function ConventionCard({ convention: c, repoId, repoUrl }: Props) {
     setEditing(false);
   };
 
+  const lineSuffix =
+    c.evidence_line_start == null
+      ? ""
+      : c.evidence_line_end &&
+          c.evidence_line_end !== c.evidence_line_start
+        ? `:${c.evidence_line_start}-${c.evidence_line_end}`
+        : `:${c.evidence_line_start}`;
   const evidenceUrl =
     repoUrl && c.evidence_path
-      ? `${repoUrl}/blob/main/${c.evidence_path}`
+      ? `${repoUrl}/blob/main/${c.evidence_path}${c.evidence_line_start ? `#L${c.evidence_line_start}${c.evidence_line_end && c.evidence_line_end !== c.evidence_line_start ? `-L${c.evidence_line_end}` : ""}` : ""}`
       : undefined;
 
   return (
@@ -92,7 +101,7 @@ export function ConventionCard({ convention: c, repoId, repoUrl }: Props) {
                   cursor: "pointer",
                 }}
               >
-                Save
+                {t("card.editSave")}
               </button>
               <button
                 onClick={handleCancelEdit}
@@ -106,24 +115,42 @@ export function ConventionCard({ convention: c, repoId, repoUrl }: Props) {
                   cursor: "pointer",
                 }}
               >
-                Cancel
+                {t("card.editCancel")}
               </button>
             </div>
           </div>
         ) : (
-          <p
-            onClick={() => setEditing(true)}
-            title="Click to edit"
-            style={{
-              fontStyle: "italic",
-              fontWeight: 600,
-              marginBottom: 10,
-              fontSize: 14,
-              cursor: "text",
-            }}
-          >
-            {c.rule}
-          </p>
+          <>
+            <div style={{ marginBottom: 8 }}>
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  border: "1px solid var(--border)",
+                  borderRadius: 999,
+                  padding: "2px 8px",
+                  color: "var(--text-muted)",
+                  textTransform: "uppercase",
+                  letterSpacing: 0.3,
+                }}
+              >
+                {c.category}
+              </span>
+            </div>
+            <p
+              onClick={() => setEditing(true)}
+              title="Click to edit"
+              style={{
+                fontStyle: "italic",
+                fontWeight: 600,
+                marginBottom: 10,
+                fontSize: 14,
+                cursor: "text",
+              }}
+            >
+              {c.rule}
+            </p>
+          </>
         )}
 
         {/* Evidence snippet */}
@@ -147,7 +174,7 @@ export function ConventionCard({ convention: c, repoId, repoUrl }: Props) {
                 gap: 8,
               }}
             >
-              <span>{c.evidence_path}</span>
+              <span>{`${c.evidence_path}${lineSuffix}`}</span>
               {evidenceUrl && (
                 <a
                   href={evidenceUrl}
@@ -181,7 +208,7 @@ export function ConventionCard({ convention: c, repoId, repoUrl }: Props) {
             color: "var(--text-muted)",
           }}
         >
-          <span>Confidence</span>
+          <span>{t("card.confidence")}</span>
           <div
             style={{
               width: 120,
@@ -229,7 +256,7 @@ export function ConventionCard({ convention: c, repoId, repoUrl }: Props) {
             opacity: accept.isPending ? 0.7 : 1,
           }}
         >
-          {c.accepted ? "✓ Accepted" : "✓ Accept"}
+          {c.accepted ? `✓ ${t("card.accepted")}` : `✓ ${t("card.accept")}`}
         </button>
         <button
           onClick={() => reject.mutate({ repoId, id: c.id })}
@@ -244,7 +271,7 @@ export function ConventionCard({ convention: c, repoId, repoUrl }: Props) {
             cursor: "pointer",
           }}
         >
-          × Reject
+          × {t("card.reject")}
         </button>
       </div>
     </div>

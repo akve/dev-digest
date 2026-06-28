@@ -78,6 +78,9 @@ export interface CreateSkillFromConventionsInput {
   repoId: string;
   name: string;
   description: string;
+  body?: string;
+  enabled?: boolean;
+  agent_id?: string;
 }
 
 export function useCreateSkillFromConventions() {

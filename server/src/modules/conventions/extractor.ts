@@ -3,19 +3,24 @@ import { join } from "path";
 import { z } from "zod";
 import type { LLMProvider } from "@devdigest/shared";
 
-// Zod схема для відповіді LLM
+// Zod schema for model output.
 const ExtractionSchema = z.object({
   candidates: z.array(
     z.object({
+      category: z.string().min(1),
       rule: z.string(),
-      evidence_path: z.string(),
-      evidence_snippet: z.string(),
+      evidence: z.object({
+        file: z.string().min(1),
+        line_start: z.number().int().positive(),
+        line_end: z.number().int().positive().optional(),
+        snippet: z.string().min(1),
+      }),
       confidence: z.number().min(0).max(1),
     }),
   ),
 });
 
-/** Читає файл з диску. Повертає null якщо файл не знайдено. Обрізає до 2000 символів. */
+/** Read file from clone. Returns null when missing. Trims for prompt budget. */
 async function readSample(
   clonePath: string,
   relativePath: string,
@@ -29,27 +34,64 @@ async function readSample(
 }
 
 /**
- * Верифікація доказів після LLM.
- * Перевіряємо що файл реально існує і перший рядок сніппета є у файлі.
+ * Evidence verification after the model call:
+ * - file exists;
+ * - referenced lines exist;
+ * - snippet text matches the referenced lines.
  */
 async function verifyEvidence(
   clonePath: string,
-  evidencePath: string,
-  evidenceSnippet: string,
-): Promise<boolean> {
+  evidence: {
+    file: string;
+    lineStart: number;
+    lineEnd: number;
+    snippet: string;
+  },
+): Promise<{ path: string; lineStart: number; lineEnd: number } | null> {
   try {
-    const fullPath = join(clonePath, evidencePath);
+    if (
+      evidence.file.startsWith("/") ||
+      evidence.file.includes("..") ||
+      evidence.file.trim().length === 0
+    ) {
+      return null;
+    }
+    const fullPath = join(clonePath, evidence.file);
     const content = await readFile(fullPath, "utf-8");
-    const firstLine = evidenceSnippet.split("\n")[0]?.trim() ?? "";
-    return firstLine.length > 0 && content.includes(firstLine);
+    const lines = content.split(/\r?\n/);
+    const lineStart = evidence.lineStart;
+    const lineEnd = Math.max(lineStart, evidence.lineEnd);
+
+    if (lineStart < 1 || lineStart > lines.length) return null;
+    if (lineEnd < 1 || lineEnd > lines.length) return null;
+
+    const rangeText = lines.slice(lineStart - 1, lineEnd).join("\n");
+    const normalizedSnippet = evidence.snippet.trim();
+    if (!normalizedSnippet) return null;
+
+    // Exact range match first; then first meaningful snippet line fallback.
+    if (rangeText.includes(normalizedSnippet)) {
+      return { path: evidence.file, lineStart, lineEnd };
+    }
+    const firstSnippetLine =
+      normalizedSnippet
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .find(Boolean) ?? "";
+    if (!firstSnippetLine || !rangeText.includes(firstSnippetLine)) return null;
+
+    return { path: evidence.file, lineStart, lineEnd };
   } catch {
-    return false;
+    return null;
   }
 }
 
 export interface ExtractedCandidate {
+  category: string;
   rule: string;
   evidencePath: string;
+  evidenceLineStart: number;
+  evidenceLineEnd: number;
   evidenceSnippet: string;
   confidence: number;
 }
@@ -122,6 +164,7 @@ Return ONLY conventions that:
 2. Can be formulated as a specific, actionable rule (start with "Always...", "Never...", "Use X instead of Y...")
 3. Appear in at least 2 places or are configured explicitly
 4. Would be useful for a code reviewer to enforce
+5. Include precise evidence path and line numbers
 
 Do NOT include:
 - Generic best practices obvious to any TypeScript developer
@@ -137,9 +180,14 @@ Analyze these files and extract coding conventions:
 ${allSamples}
 
 Return JSON with a "candidates" array. Each candidate:
+- category: one of ["architecture","typescript","style","testing","api","security","general"]
 - rule: specific actionable rule in imperative form
-- evidence_path: relative file path where you found this convention
-- evidence_snippet: exact code snippet (2–5 lines) demonstrating the rule
+- evidence: {
+    file: relative file path where the convention was found,
+    line_start: first line number (1-based),
+    line_end: last line number (optional),
+    snippet: exact code snippet (2-5 lines) demonstrating the rule
+  }
 - confidence: 0.0–1.0
 
 Only include conventions with confidence > 0.6.`,
@@ -151,19 +199,22 @@ Only include conventions with confidence > 0.6.`,
 
   const verified: ExtractedCandidate[] = [];
   for (const c of result.data.candidates) {
-    const valid = await verifyEvidence(
-      clonePath,
-      c.evidence_path,
-      c.evidence_snippet,
-    );
-    if (valid) {
-      verified.push({
-        rule: c.rule,
-        evidencePath: c.evidence_path,
-        evidenceSnippet: c.evidence_snippet,
-        confidence: c.confidence,
-      });
-    }
+    const verifiedEvidence = await verifyEvidence(clonePath, {
+      file: c.evidence.file,
+      lineStart: c.evidence.line_start,
+      lineEnd: c.evidence.line_end ?? c.evidence.line_start,
+      snippet: c.evidence.snippet,
+    });
+    if (!verifiedEvidence) continue;
+    verified.push({
+      category: c.category,
+      rule: c.rule,
+      evidencePath: verifiedEvidence.path,
+      evidenceLineStart: verifiedEvidence.lineStart,
+      evidenceLineEnd: verifiedEvidence.lineEnd,
+      evidenceSnippet: c.evidence.snippet,
+      confidence: c.confidence,
+    });
   }
 
   return verified;
