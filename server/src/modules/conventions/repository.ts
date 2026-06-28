@@ -35,8 +35,11 @@ export class ConventionsRepository {
     workspaceId: string,
     repoId: string,
     candidates: Array<{
+      category?: string;
       rule: string;
       evidencePath: string;
+      evidenceLineStart?: number;
+      evidenceLineEnd?: number;
       evidenceSnippet: string;
       confidence: number;
     }>,
@@ -58,8 +61,11 @@ export class ConventionsRepository {
         candidates.map((c) => ({
           workspaceId,
           repoId,
+          category: c.category ?? "general",
           rule: c.rule,
           evidencePath: c.evidencePath,
+          evidenceLineStart: c.evidenceLineStart,
+          evidenceLineEnd: c.evidenceLineEnd,
           evidenceSnippet: c.evidenceSnippet,
           confidence: c.confidence,
           accepted: false,

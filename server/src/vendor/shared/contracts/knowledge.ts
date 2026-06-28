@@ -189,8 +189,11 @@ export type SkillImportPreview = z.infer<typeof SkillImportPreview>;
 // ---- Conventions ----
 export const ConventionCandidate = z.object({
   id: z.string(),
+  category: z.string(),
   rule: z.string(),
   evidence_path: z.string(),
+  evidence_line_start: z.number().int().positive().nullish(),
+  evidence_line_end: z.number().int().positive().nullish(),
   evidence_snippet: z.string(),
   confidence: z.number().min(0).max(1),
   accepted: z.boolean(),

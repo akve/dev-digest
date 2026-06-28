@@ -11,7 +11,6 @@ All routes use `fastify-type-provider-zod`. Every input and output is validated 
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/health` | Liveness check |
-| `GET` | `/healthcheck` | Liveness check alias |
 | `GET` | `/health/ready` | Readiness check (DB ping; `200`/`503`) |
 
 ### Repos

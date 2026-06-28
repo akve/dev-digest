@@ -98,7 +98,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
 
   // Liveness checks (no module, no DB, no rate limit).
   app.get('/health', { config: { rateLimit: false } }, async () => ({ status: 'ok' }));
-  app.get('/healthcheck', { config: { rateLimit: false } }, async () => ({ status: 'ok' }));
+  // app.get('/healthcheck', { config: { rateLimit: false } }, async () => ({ status: 'ok' }));
 
   // Readiness check — verifies the DB is reachable with a cheap `SELECT 1`.
   // 503 (not 500) so orchestrators treat it as "not ready yet", not a crash.

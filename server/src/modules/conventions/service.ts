@@ -7,14 +7,18 @@ import { NotFoundError, ValidationError } from "../../platform/errors.js";
 import { ConventionsRepository } from "./repository.js";
 import { extractConventions } from "./extractor.js";
 import { SkillsService } from "../skills/service.js";
+import { AgentsService } from "../agents/service.js";
 import { resolveFeatureModel } from "../settings/feature-models.js";
 import type { ConventionRow } from "./repository.js";
 
 function toDto(row: ConventionRow): ConventionCandidate {
   return {
     id: row.id,
+    category: row.category ?? "general",
     rule: row.rule,
     evidence_path: row.evidencePath ?? "",
+    evidence_line_start: row.evidenceLineStart,
+    evidence_line_end: row.evidenceLineEnd,
     evidence_snippet: row.evidenceSnippet ?? "",
     confidence: row.confidence ?? 0,
     accepted: row.accepted,
@@ -24,10 +28,12 @@ function toDto(row: ConventionRow): ConventionCandidate {
 export class ConventionsService {
   private repo: ConventionsRepository;
   private skills: SkillsService;
+  private agents: AgentsService;
 
   constructor(private container: Container) {
     this.repo = new ConventionsRepository(container.db);
     this.skills = new SkillsService(container);
+    this.agents = new AgentsService(container);
   }
 
   async list(
@@ -118,6 +124,11 @@ export class ConventionsService {
     repoId: string,
     skillName: string,
     skillDescription: string,
+    opts?: {
+      body?: string;
+      enabled?: boolean;
+      agentId?: string;
+    },
   ): Promise<Skill> {
     const [repoRow] = await this.container.db
       .select()
@@ -131,13 +142,21 @@ export class ConventionsService {
     const repoName = repoRow?.name ?? "repo";
 
     const sections = accepted.map((c) => {
+      const lineSpan =
+        c.evidenceLineStart == null
+          ? ""
+          : c.evidenceLineEnd && c.evidenceLineEnd !== c.evidenceLineStart
+            ? `:${c.evidenceLineStart}-${c.evidenceLineEnd}`
+            : `:${c.evidenceLineStart}`;
+      const evidenceRef = c.evidencePath ? `\`${c.evidencePath}${lineSpan}\`` : "";
       const snippetBlock = c.evidenceSnippet
-        ? `\nDetected in \`${c.evidencePath}\`:\n\`\`\`\n${c.evidenceSnippet}\n\`\`\``
+        ? `\nDetected in ${evidenceRef}:\n\`\`\`\n${c.evidenceSnippet}\n\`\`\``
         : "";
-      return `## ${c.rule}${snippetBlock}`;
+      const category = c.category ?? "general";
+      return `## [${category}] ${c.rule}${snippetBlock}`;
     });
 
-    const body = [
+    const generatedBody = [
       `# ${skillName}`,
       "",
       `House conventions for \`${repoName}\`. Flag changes that violate any rule below and cite the offending \`file:line\`.`,
@@ -145,13 +164,19 @@ export class ConventionsService {
       ...sections,
     ].join("\n\n");
 
-    return this.skills.create(workspaceId, {
+    const skill = await this.skills.create(workspaceId, {
       name: skillName,
       description: skillDescription,
       type: "convention",
       source: "extracted",
-      body,
-      enabled: true,
+      body: opts?.body?.trim() ? opts.body : generatedBody,
+      enabled: opts?.enabled ?? true,
     });
+
+    if (opts?.agentId) {
+      await this.agents.linkSkill(workspaceId, opts.agentId, skill.id);
+    }
+
+    return skill;
   }
 }

@@ -5,7 +5,11 @@ import { useTranslations } from "next-intl";
 import { Button, EmptyState, Skeleton, ErrorState } from "@devdigest/ui";
 import { AppShell } from "@/components/app-shell";
 import { useActiveRepo } from "@/lib/contexts/repoContext";
-import { useConventions, useExtractConventions } from "@/lib/hooks/conventions";
+import {
+  useConventions,
+  useExtractConventions,
+  useRejectConvention,
+} from "@/lib/hooks/conventions";
 import { ConventionCard } from "../ConventionCard/ConventionCard";
 import { CreateSkillFromConventionsModal } from "../CreateSkillFromConventionsModal/CreateSkillFromConventionsModal";
 
@@ -19,6 +23,7 @@ export function ConventionsView() {
     refetch,
   } = useConventions(repoId);
   const extract = useExtractConventions();
+  const reject = useRejectConvention();
   const [showModal, setShowModal] = React.useState(false);
 
   const accepted = conventions.filter((c) => c.accepted);
@@ -58,9 +63,14 @@ export function ConventionsView() {
               </span>
             </h1>
             {total > 0 && (
-              <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
-                {t("page.acceptedCount", { count: accepted.length, total })}
-              </p>
+              <>
+                <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
+                  {t("page.candidateCount", { count: total })}
+                </p>
+                <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
+                  {t("page.acceptedCount", { count: accepted.length, total })}
+                </p>
+              </>
             )}
           </div>
 
@@ -84,6 +94,30 @@ export function ConventionsView() {
             )}
           </div>
         </div>
+
+        {accepted.length > 0 && (
+          <div style={{ marginBottom: 10 }}>
+            <button
+              onClick={() => {
+                if (!repoId) return;
+                accepted.forEach((item) => {
+                  reject.mutate({ repoId, id: item.id });
+                });
+              }}
+              style={{
+                border: "1px solid var(--border)",
+                background: "transparent",
+                color: "var(--text-muted)",
+                fontSize: 12,
+                borderRadius: 6,
+                padding: "5px 10px",
+                cursor: "pointer",
+              }}
+            >
+              × {t("page.deselectAll")}
+            </button>
+          </div>
+        )}
 
         {/* Extraction failure — shown above content so it surfaces whether the
             list is empty or populated, instead of silently re-rendering empty. */}

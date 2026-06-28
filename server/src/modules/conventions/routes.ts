@@ -19,6 +19,9 @@ const PatchBody = z.object({
 const CreateSkillBody = z.object({
   name: z.string().min(1),
   description: z.string().default(""),
+  body: z.string().optional(),
+  enabled: z.boolean().optional(),
+  agent_id: z.string().uuid().optional(),
 });
 
 export default async function conventionsRoutes(appBase: FastifyInstance) {
@@ -97,6 +100,11 @@ export default async function conventionsRoutes(appBase: FastifyInstance) {
         req.params.repoId,
         req.body.name,
         req.body.description,
+        {
+          body: req.body.body,
+          enabled: req.body.enabled,
+          agentId: req.body.agent_id,
+        },
       );
       reply.status(201);
       return skill;
