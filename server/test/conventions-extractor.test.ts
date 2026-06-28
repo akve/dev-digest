@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type { LLMProvider, ModelInfo, StructuredRequest } from "@devdigest/shared";
@@ -91,5 +91,40 @@ describe("extractConventions path safety", () => {
 
     expect(result).toHaveLength(1);
     expect(result[0]!.evidencePath).toBe("src/safe.ts");
+  });
+
+  it("rejects symlink-based escape paths", async () => {
+    const clonePath = await mkdtemp(join(tmpdir(), "dd-conv-"));
+    const outsideDir = await mkdtemp(join(tmpdir(), "dd-outside-"));
+    await mkdir(join(clonePath, "src"), { recursive: true });
+    await writeFile(join(clonePath, "src", "safe.ts"), "const safe = true;\n", "utf-8");
+    await writeFile(join(outsideDir, "secret.ts"), "const secret = 1;\n", "utf-8");
+
+    // Symlink inside repo that points outside.
+    await symlink(outsideDir, join(clonePath, "escape"));
+
+    const llm = mockLlm([
+      {
+        category: "security",
+        rule: "Do not allow traversal",
+        evidence: {
+          file: "escape/secret.ts",
+          line_start: 1,
+          line_end: 1,
+          snippet: "const secret = 1;",
+        },
+        confidence: 0.95,
+      },
+    ]);
+
+    const result = await extractConventions({
+      clonePath,
+      samplePaths: ["src/safe.ts"],
+      repoName: "repo",
+      llm,
+      model: "mock",
+    });
+
+    expect(result).toEqual([]);
   });
 });

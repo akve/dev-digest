@@ -1,4 +1,4 @@
-import { readFile } from "fs/promises";
+import { readFile, realpath } from "fs/promises";
 import { isAbsolute, relative, resolve, sep } from "path";
 import { z } from "zod";
 import type { LLMProvider } from "@devdigest/shared";
@@ -20,22 +20,34 @@ const ExtractionSchema = z.object({
   ),
 });
 
-function resolveSafeRepoPath(
+async function resolveSafeRepoPath(
   clonePath: string,
   candidatePath: string,
-): { fullPath: string; relativePath: string } | null {
+): Promise<{ fullPath: string; relativePath: string } | null> {
   const trimmed = candidatePath.trim();
   if (!trimmed) return null;
   if (trimmed.includes("\0")) return null;
+  if (trimmed.startsWith("\\\\")) return null;
   if (isAbsolute(trimmed)) return null;
   if (/^[A-Za-z]:[\\/]/.test(trimmed)) return null;
 
   const baseDir = resolve(clonePath);
   const fullPath = resolve(baseDir, trimmed);
-  const rel = relative(baseDir, fullPath);
-  if (!rel || rel === ".." || rel.startsWith(`..${sep}`)) return null;
+  const lexicalRel = relative(baseDir, fullPath);
+  if (!lexicalRel || lexicalRel === ".." || lexicalRel.startsWith(`..${sep}`)) {
+    return null;
+  }
 
-  return { fullPath, relativePath: rel.split("\\").join("/") };
+  // Resolve symlinks and enforce containment again on canonical paths.
+  const realBase = await realpath(baseDir).catch(() => null);
+  const realTarget = await realpath(fullPath).catch(() => null);
+  if (!realBase || !realTarget) return null;
+  const realRel = relative(realBase, realTarget);
+  if (!realRel || realRel === ".." || realRel.startsWith(`..${sep}`)) {
+    return null;
+  }
+
+  return { fullPath: realTarget, relativePath: realRel.split("\\").join("/") };
 }
 
 /** Read file from clone. Returns null when missing. Trims for prompt budget. */
@@ -44,7 +56,7 @@ async function readSample(
   relativePath: string,
 ): Promise<string | null> {
   try {
-    const resolved = resolveSafeRepoPath(clonePath, relativePath);
+    const resolved = await resolveSafeRepoPath(clonePath, relativePath);
     if (!resolved) return null;
     const content = await readFile(resolved.fullPath, "utf-8");
     return content.slice(0, 2_000);
@@ -69,7 +81,7 @@ async function verifyEvidence(
   },
 ): Promise<{ path: string; lineStart: number; lineEnd: number } | null> {
   try {
-    const resolved = resolveSafeRepoPath(clonePath, evidence.file);
+    const resolved = await resolveSafeRepoPath(clonePath, evidence.file);
     if (!resolved) return null;
     const content = await readFile(resolved.fullPath, "utf-8");
     const lines = content.split(/\r?\n/);
