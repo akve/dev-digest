@@ -1,5 +1,5 @@
 import { readFile } from "fs/promises";
-import { join } from "path";
+import { isAbsolute, relative, resolve, sep } from "path";
 import { z } from "zod";
 import type { LLMProvider } from "@devdigest/shared";
 
@@ -20,13 +20,33 @@ const ExtractionSchema = z.object({
   ),
 });
 
+function resolveSafeRepoPath(
+  clonePath: string,
+  candidatePath: string,
+): { fullPath: string; relativePath: string } | null {
+  const trimmed = candidatePath.trim();
+  if (!trimmed) return null;
+  if (trimmed.includes("\0")) return null;
+  if (isAbsolute(trimmed)) return null;
+  if (/^[A-Za-z]:[\\/]/.test(trimmed)) return null;
+
+  const baseDir = resolve(clonePath);
+  const fullPath = resolve(baseDir, trimmed);
+  const rel = relative(baseDir, fullPath);
+  if (!rel || rel === ".." || rel.startsWith(`..${sep}`)) return null;
+
+  return { fullPath, relativePath: rel.split("\\").join("/") };
+}
+
 /** Read file from clone. Returns null when missing. Trims for prompt budget. */
 async function readSample(
   clonePath: string,
   relativePath: string,
 ): Promise<string | null> {
   try {
-    const content = await readFile(join(clonePath, relativePath), "utf-8");
+    const resolved = resolveSafeRepoPath(clonePath, relativePath);
+    if (!resolved) return null;
+    const content = await readFile(resolved.fullPath, "utf-8");
     return content.slice(0, 2_000);
   } catch {
     return null;
@@ -49,15 +69,9 @@ async function verifyEvidence(
   },
 ): Promise<{ path: string; lineStart: number; lineEnd: number } | null> {
   try {
-    if (
-      evidence.file.startsWith("/") ||
-      evidence.file.includes("..") ||
-      evidence.file.trim().length === 0
-    ) {
-      return null;
-    }
-    const fullPath = join(clonePath, evidence.file);
-    const content = await readFile(fullPath, "utf-8");
+    const resolved = resolveSafeRepoPath(clonePath, evidence.file);
+    if (!resolved) return null;
+    const content = await readFile(resolved.fullPath, "utf-8");
     const lines = content.split(/\r?\n/);
     const lineStart = evidence.lineStart;
     const lineEnd = Math.max(lineStart, evidence.lineEnd);
@@ -71,7 +85,7 @@ async function verifyEvidence(
 
     // Exact range match first; then first meaningful snippet line fallback.
     if (rangeText.includes(normalizedSnippet)) {
-      return { path: evidence.file, lineStart, lineEnd };
+      return { path: resolved.relativePath, lineStart, lineEnd };
     }
     const firstSnippetLine =
       normalizedSnippet
@@ -80,7 +94,7 @@ async function verifyEvidence(
         .find(Boolean) ?? "";
     if (!firstSnippetLine || !rangeText.includes(firstSnippetLine)) return null;
 
-    return { path: evidence.file, lineStart, lineEnd };
+    return { path: resolved.relativePath, lineStart, lineEnd };
   } catch {
     return null;
   }
