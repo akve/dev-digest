@@ -37,6 +37,28 @@ export function useCreateSkill() {
   });
 }
 
+export interface ImportSkillInput {
+  name: string;
+  body: string;
+  description?: string;
+  type?: SkillType;
+  source?: SkillSource;
+  enabled?: boolean;
+}
+
+/** Back-compat alias used by older modal codepaths. */
+export function useImportSkill() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ImportSkillInput) =>
+      api.post<Skill>("/skills", {
+        ...input,
+        source: input.source ?? "imported_url",
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["skills"] }),
+  });
+}
+
 export interface UpdateSkillInput {
   id: string;
   patch: Partial<Pick<Skill, "name" | "description" | "type" | "source" | "body" | "enabled">> & { version_message?: string };

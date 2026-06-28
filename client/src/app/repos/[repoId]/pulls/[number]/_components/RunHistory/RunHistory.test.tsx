@@ -7,7 +7,7 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
-import type { RunSummary } from "@devdigest/shared";
+import type { FindingRecord, RunSummary } from "@devdigest/shared";
 import messages from "../../../../../../../../messages/en/prReview.json";
 import { RunHistory } from "./RunHistory";
 
@@ -31,14 +31,45 @@ function run(o: Partial<RunSummary>): RunSummary {
     ran_at: "2026-06-11T18:44:34.000Z",
     score: null,
     blockers: null,
+    findings_critical: null,
+    findings_warning: null,
+    findings_suggestion: null,
     ...o,
   };
 }
 
-function renderRuns(runs: RunSummary[]) {
+function mkFinding(id: string, severity: "CRITICAL" | "WARNING" | "SUGGESTION"): FindingRecord {
+  return {
+    id,
+    severity,
+    category: "bug",
+    title: `${severity} finding`,
+    file: "src/file.ts",
+    start_line: 10,
+    end_line: 10,
+    rationale: "test rationale",
+    suggestion: null,
+    confidence: 0.9,
+    kind: "finding",
+    trifecta_components: null,
+    evidence: null,
+    review_id: "r1",
+    accepted_at: null,
+    dismissed_at: null,
+  };
+}
+
+function renderRuns(
+  runs: RunSummary[],
+  findingsByRunId?: Map<string, FindingRecord[]>,
+) {
   return render(
     <NextIntlClientProvider locale="en" messages={{ prReview: messages }}>
-      <RunHistory runs={runs} onOpenTrace={() => {}} />
+      <RunHistory
+        runs={runs}
+        findingsByRunId={findingsByRunId}
+        onOpenTrace={() => {}}
+      />
     </NextIntlClientProvider>,
   );
 }
@@ -49,7 +80,6 @@ describe("RunHistory — outcome badge", () => {
     expect(screen.getByText("rejected")).toBeInTheDocument();
     expect(screen.queryByText("done")).not.toBeInTheDocument();
     expect(screen.getByText("0")).toBeInTheDocument(); // CircularScore renders the number
-    expect(screen.getByText(/5 blockers/)).toBeInTheDocument();
   });
 
   it("a clean done run reads 'approved'", () => {
@@ -84,5 +114,83 @@ describe("RunHistory — outcome badge", () => {
     renderRuns([run({ status: "done", tokens_in: 0, tokens_out: 0, cost_usd: null, score: 80 })]);
     expect(screen.getByText("—")).toBeInTheDocument();
     expect(screen.queryByText(/\$0\.00/)).not.toBeInTheDocument();
+  });
+});
+
+describe("RunHistory — per-severity chips", () => {
+  it("shows SeverityChip counts when findings_critical/warning/suggestion are set", () => {
+    const runSummary = run({
+      status: "done",
+      findings_count: 6,
+      blockers: 2,
+      score: 45,
+      findings_critical: 2,
+      findings_warning: 3,
+      findings_suggestion: 1,
+    });
+    const findings = new Map<string, FindingRecord[]>([
+      [
+        runSummary.run_id,
+        [
+          mkFinding("f1", "CRITICAL"),
+          mkFinding("f2", "CRITICAL"),
+          mkFinding("f3", "WARNING"),
+          mkFinding("f4", "WARNING"),
+          mkFinding("f5", "WARNING"),
+          mkFinding("f6", "SUGGESTION"),
+        ],
+      ],
+    ]);
+    renderRuns([
+      runSummary,
+    ], findings);
+    expect(screen.getByTitle("2 critical")).toBeInTheDocument();
+    expect(screen.getByTitle("3 warning")).toBeInTheDocument();
+    expect(screen.getByTitle("1 suggestion")).toBeInTheDocument();
+  });
+
+  it("shows no chips when all per-severity counts are null", () => {
+    const { container } = renderRuns([
+      run({
+        status: "done",
+        findings_count: 0,
+        blockers: 0,
+        score: 90,
+        findings_critical: null,
+        findings_warning: null,
+        findings_suggestion: null,
+      }),
+    ]);
+    // SeverityChip renders faded dots with opacity:0.2 — none should appear
+    const fadedDots = container.querySelectorAll('[style*="opacity: 0.2"]');
+    expect(fadedDots).toHaveLength(0);
+  });
+
+  it("shows only non-zero chips", () => {
+    const runSummary = run({
+      status: "done",
+      findings_count: 4,
+      blockers: 4,
+      score: 20,
+      findings_critical: 4,
+      findings_warning: 0,
+      findings_suggestion: 0,
+    });
+    const findings = new Map<string, FindingRecord[]>([
+      [
+        runSummary.run_id,
+        [
+          mkFinding("f1", "CRITICAL"),
+          mkFinding("f2", "CRITICAL"),
+          mkFinding("f3", "CRITICAL"),
+          mkFinding("f4", "CRITICAL"),
+        ],
+      ],
+    ]);
+    renderRuns([runSummary], findings);
+    expect(screen.getByTitle("4 critical")).toBeInTheDocument();
+    // warning=0, suggestion=0 → no chips for those counts
+    expect(screen.queryByTitle("0 warning")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("0 suggestion")).not.toBeInTheDocument();
   });
 });

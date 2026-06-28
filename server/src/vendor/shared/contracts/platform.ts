@@ -174,6 +174,8 @@ export const PrMeta = z.object({
   // Cost (USD) of the latest review batch (list endpoint only). null/absent
   // when the PR has no priced run yet; UI shows "—", not "$0".
   cost_usd: z.number().nullish(),
+  // Legacy alias for list COST kept while older clients are still in use.
+  last_run_cost_usd: z.number().nullish(),
   // Findings of the latest review batch (list endpoint only; null/absent until
   // reviewed). The list shows both per-severity chips (counts derived client-
   // side) and a hover popover, so it carries the findings themselves rather than
@@ -181,6 +183,10 @@ export const PrMeta = z.object({
   // all describe one "Review all" batch. The repo's PR list is small/capped, so
   // the payload stays modest.
   findings: z.array(Finding).nullish(),
+  // Legacy per-severity counters kept for backward compatibility.
+  findings_critical: z.number().int().nullish(),
+  findings_warning: z.number().int().nullish(),
+  findings_suggestion: z.number().int().nullish(),
 });
 export type PrMeta = z.infer<typeof PrMeta>;
 

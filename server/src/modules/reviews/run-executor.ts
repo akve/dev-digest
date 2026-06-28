@@ -8,6 +8,7 @@ import type { ReviewRepository, FindingRow, PullRow, ReviewRow } from './reposit
 import { REVIEW_STRATEGY } from './constants.js';
 import { taskLine } from './helpers.js';
 import { loadDiff } from './diff-loader.js';
+import { IntentService } from '../intent/service.js';
 
 /** Thrown by a run when the user cancels it mid-flight (between map files). */
 export class RunCancelledError extends Error {
@@ -105,6 +106,43 @@ export class ReviewRunExecutor {
     }
     runLog.info(`Diff ready — ${diff.files.length} changed file(s); starting ${jobs.length} agent run(s)`);
 
+    // Compute intent ONCE per executeRuns — before the per-agent loop.
+    // Best-effort: a failure here must NEVER fail the review run.
+    let intentBlock: string | undefined;
+    try {
+      // Prefer the stored intent (avoids an LLM call when already computed).
+      let intent = await this.repo.getIntent(pull.id);
+      if (!intent) {
+        intent = await new IntentService(this.container, logger).computeForRun(
+          workspaceId,
+          pull,
+          repo,
+          diff,
+        );
+        runLog.info('intent: computed and stored for PR', { prId: pull.id, intent: intent.intent });
+      } else {
+        runLog.info('intent: loaded from store (no LLM call)', {
+          prId: pull.id,
+          intent: intent.intent,
+        });
+      }
+
+      const scopeLines = (label: string, items: string[]) =>
+        items.length > 0 ? `${label}:\n${items.map((i) => `- ${i}`).join('\n')}` : '';
+      const inScopeSection = scopeLines('In scope', intent.in_scope);
+      const outScopeSection = scopeLines('Out of scope', intent.out_of_scope);
+      intentBlock = [
+        `Intent: ${intent.intent}`,
+        ...(inScopeSection ? [inScopeSection] : []),
+        ...(outScopeSection ? [outScopeSection] : []),
+        'Rule: Do not comment outside this scope. If you spot a serious problem that is OUT OF SCOPE, emit exactly ONE signal finding for it — not many.',
+      ].join('\n');
+    } catch (err) {
+      runLog.info(
+        `intent: computation failed — continuing without intent block (${(err as Error).message})`,
+      );
+    }
+
     for (const { agent, runId } of jobs) {
       const agentStart = Date.now();
       logger?.info(
@@ -112,7 +150,16 @@ export class ReviewRunExecutor {
         `review: agent "${agent.name}" started (${agent.provider}/${agent.model})`,
       );
       try {
-        const outcome = await this.runOneAgent(workspaceId, pull, repo, diff, agent, runId, runLog);
+        const outcome = await this.runOneAgent(
+          workspaceId,
+          pull,
+          repo,
+          diff,
+          agent,
+          runId,
+          runLog,
+          intentBlock,
+        );
         logger?.info(
           {
             runId,
@@ -144,6 +191,7 @@ export class ReviewRunExecutor {
     agent: AgentRow,
     runId: string,
     parentLog: RunLogger,
+    intentBlock?: string,
   ): Promise<RunOutcome> {
     const start = Date.now();
     // Narrow the fanned-out pre-work logger to THIS run; the shared diff/intent
@@ -187,7 +235,15 @@ export class ReviewRunExecutor {
       // Fetch enabled skills linked to this agent (in order). Their bodies are
       // injected into the prompt as "## Skills / rules" by assemblePrompt.
       const linked = await this.container.agentsRepo.linkedSkills(agent.id);
-      const skillBodies = linked.filter((l) => l.skill.enabled).map((l) => l.skill.body);
+      const skillBodies = linked
+        .filter((l) => l.skill.enabled)
+        .map((l) => {
+          const source = l.skill.source;
+          if (source === 'imported_url' || source === 'community') {
+            return `<untrusted source="skill:${source}">\n${l.skill.body.replaceAll('</untrusted>', '<\\/untrusted>')}\n</untrusted>`;
+          }
+          return l.skill.body;
+        });
       if (skillBodies.length) runLog.info(`skills: ${skillBodies.length} enabled skill(s) attached`);
 
       // ---- Engine: assemble → single-pass → grounding -----------------------
@@ -210,6 +266,8 @@ export class ReviewRunExecutor {
         // PR author's description/body — untrusted; assemblePrompt wraps +
         // truncates it. Omitted when the PR has no body.
         ...(pull.body ? { prDescription: pull.body } : {}),
+        // T6 — intent block (computed once per run, shared across agents).
+        ...(intentBlock ? { intent: intentBlock } : {}),
         task,
         ...(skillBodies.length ? { skills: skillBodies } : {}),
         sessionId: `${repo.owner}/${repo.name}#${pull.number}:${agent.name}`,

@@ -218,6 +218,11 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
     const now = Date.now();
     return rows.map((r) => {
       const review = latestReviewByPr.get(r.id);
+      const findings = findingsByPr.get(r.id) ?? null;
+      const findingsCritical = findings?.filter((f) => f.severity === 'CRITICAL').length ?? 0;
+      const findingsWarning = findings?.filter((f) => f.severity === 'WARNING').length ?? 0;
+      const findingsSuggestion = findings?.filter((f) => f.severity === 'SUGGESTION').length ?? 0;
+      const costUsd = costByPr.has(r.id) ? costByPr.get(r.id)! : null;
       return {
         id: r.id,
         number: r.number,
@@ -239,8 +244,14 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
         opened_at: r.openedAt?.toISOString() ?? null,
         updated_at: r.updatedAt?.toISOString() ?? null,
         score: review ? review.score : null,
-        cost_usd: costByPr.has(r.id) ? costByPr.get(r.id)! : null,
-        findings: findingsByPr.get(r.id) ?? null,
+        // New list payload shape.
+        cost_usd: costUsd,
+        findings,
+        // Legacy list payload shape kept for compatibility.
+        last_run_cost_usd: costUsd,
+        findings_critical: findings ? findingsCritical : null,
+        findings_warning: findings ? findingsWarning : null,
+        findings_suggestion: findings ? findingsSuggestion : null,
       };
     });
   });
