@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { Provider } from './knowledge.js';
-import { Finding } from './findings.js';
+import { Provider } from './knowledge';
+import { Finding } from './findings';
 
 /**
  * Platform / scaffolding DTOs owned by F1:
